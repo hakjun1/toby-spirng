@@ -1,109 +1,55 @@
 package com.likelion.dao;
 
 import com.likelion.domain.User;
-import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
+import javax.sql.DataSource;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.List;
 
 public class UserDao {
-    private ConnectionMaker connectionMaker;
+    private DataSource dataSource;
+    private JdbcTemplate jdbcTemplate;
+    private  RowMapper<User> rowMapper = new RowMapper<User>() {
+        @Override
+        public User mapRow(ResultSet rs, int rowNum) throws SQLException {
+            User user = new User(rs.getString("id"), rs.getString("name"), rs.getString("password"));
+            return user;
+        }
+    };
 
     public UserDao() {
     }
 
-    public UserDao(ConnectionMaker connectionMaker) {
-        this.connectionMaker = connectionMaker;
+    public UserDao(DataSource dataSource) {
+        this.dataSource = dataSource;
+        this.jdbcTemplate = new JdbcTemplate(dataSource);
     }
 
-    public void jdbcContextWithStatmentStrategy(StatementStrategy statementStrategy) throws SQLException {
-        Connection c = null;
-        PreparedStatement ps = null;
-        try {
-            c = connectionMaker.makeConnection();
-            ps = statementStrategy.makePreParedStatment(c);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            throw e;
-        } finally {
-            if (ps != null) {
-                try {
-                    ps.close();
-                } catch (SQLException e) {
-                }
-            }
-            if (c != null) {
-                try {
-                    c.close();
-                } catch (SQLException e) {
-                }
-            }
-        }
-    }
 
-    public void add(User user) throws SQLException {
-       jdbcContextWithStatmentStrategy(new AddStrategy(user));
+
+    public void add(final User user) throws SQLException {
+        this.jdbcTemplate.update("INSERT INTO users(id,name,password) values(?,?,?);", user.getId(), user.getName(), user.getPassword());
     }
 
     public User get(String id) throws SQLException {
-        Connection c = connectionMaker.makeConnection();
-        PreparedStatement ps = c.prepareStatement("SELECT*FROM users WHERE id =?");
-        ps.setString(1,id);
-
-        ResultSet rs = ps.executeQuery();
-        User user = null;
-        if (rs.next()) {
-           // rs.next();
-            user = new User(rs.getString("id"), rs.getString("name"), rs.getString("password"));
-        }
-        rs.close();
-        ps.close();
-        c.close();
-
-
-        if (user==null) {
-            throw new EmptyResultDataAccessException(1);
-        }
-        return user;
+        String sql = "SELECT * FROM users WHERE id =?";
+        return this.jdbcTemplate.queryForObject(sql, rowMapper, id);
     }
 
     public void deleteAll() throws SQLException {
-        jdbcContextWithStatmentStrategy(new DeleteAllStrategy());
+        this.jdbcTemplate.update("delete from users");
     }
-    public int getCount() throws SQLException {
-        Connection c = null;
-        PreparedStatement ps = null;
-        ResultSet rs = null;
-        try {
-            c = connectionMaker.makeConnection();
-            ps = c.prepareStatement("SELECT count(*) from users");
-            rs = ps.executeQuery();
-            rs.next();
-            return rs.getInt(1);
 
-        } catch (SQLException e) {
-            throw e;
-        } finally {
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                }
-            }
-            if (ps != null) {
-                try {
-                    ps.close();
-                } catch (SQLException e) {
-                }
-            }
-            if (c != null) {
-                try {
-                    c.close();
-                } catch (SQLException e) {
-                }
-            }
-        }
+    public int getCount() throws SQLException {
+        return this.jdbcTemplate.queryForObject("SELECT COUNT(*) from users;", Integer.class);
+                                //queryForInt
     }
+    public List<User> getAll() {
+        String sql = "SELECT*FROM users order by id";
+        return this.jdbcTemplate.query(sql,rowMapper);
+    }
+
 }
