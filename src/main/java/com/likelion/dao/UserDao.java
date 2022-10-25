@@ -18,17 +18,35 @@ public class UserDao {
         this.connectionMaker = connectionMaker;
     }
 
-    public void add(User user) throws SQLException {
-        Connection c = connectionMaker.makeConnection();
-        PreparedStatement ps = c.prepareStatement("INSERT INTO users(id,name,password) values(?,?,?)");
-        ps.setString(1, user.getId());
-        ps.setString(2, user.getName());
-        ps.setString(3, user.getPassword());
-
-        ps.executeUpdate();
-        ps.close();
-        c.close();
+    public void jdbcContextWithStatmentStrategy(StatementStrategy statementStrategy) throws SQLException {
+        Connection c = null;
+        PreparedStatement ps = null;
+        try {
+            c = connectionMaker.makeConnection();
+            ps = statementStrategy.makePreParedStatment(c);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw e;
+        } finally {
+            if (ps != null) {
+                try {
+                    ps.close();
+                } catch (SQLException e) {
+                }
+            }
+            if (c != null) {
+                try {
+                    c.close();
+                } catch (SQLException e) {
+                }
+            }
+        }
     }
+
+    public void add(User user) throws SQLException {
+       jdbcContextWithStatmentStrategy(new AddStrategy(user));
+    }
+
     public User get(String id) throws SQLException {
         Connection c = connectionMaker.makeConnection();
         PreparedStatement ps = c.prepareStatement("SELECT*FROM users WHERE id =?");
@@ -50,29 +68,9 @@ public class UserDao {
         }
         return user;
     }
+
     public void deleteAll() throws SQLException {
-        Connection c = null;
-        PreparedStatement ps = null;
-        try {
-            c = connectionMaker.makeConnection();
-            ps = c.prepareStatement("delete from users");
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            throw e;
-        } finally {
-            if (ps != null) {
-                try {
-                    ps.close();
-                } catch (SQLException e) {
-                }
-            }
-            if (c != null) {
-                try {
-                    c.close();
-                } catch (SQLException e) {
-                }
-            }
-        }
+        jdbcContextWithStatmentStrategy(new DeleteAllStrategy());
     }
     public int getCount() throws SQLException {
         Connection c = null;
